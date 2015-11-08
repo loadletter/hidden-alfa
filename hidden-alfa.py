@@ -22,7 +22,18 @@ class TarFormat:
 		return data
 		
 	def extract(self, **kwargs):
-		pass
+		#todo
+		return
+
+
+def pack_size(self, i):
+	data = struct.pack('<I', i)
+	assert len(data) == 4
+	return data
+	
+def unpack_size(self, data):
+	assert len(data) == 4
+	return struct.unpack('<I', data)
 
 class HiddenAlfa:
 	def __init__(self.image):
@@ -36,18 +47,9 @@ class HiddenAlfa:
 		self._zlib = ZlibFormat()
 		self._tar = TarFormat()
 		self.formats = {
-			"z" : self._zlib,
+			"Z" : self._zlib,
 			"t" : self._tar
 		}
-	
-	def _pack_size(self, i):
-		data = struct.pack('<I', i)
-		assert len(data) == 4
-		return data
-		
-	def _unpack_size(self, data):
-		assert len(data) == 4
-		return struct.unpack('<I', data)
 	
 	def usable_size(self):
 		size = 0
@@ -57,9 +59,9 @@ class HiddenAlfa:
 					size += 3
 		return size
 		
-	def _add_raw_data(self, data, flags=''):
+	def _write_raw_data(self, data, flags=''):
 		headlen = 4 + len(flags) + 1
-		out = self._pack_size(len(data) + headlen) + flags + '|' + data
+		out = pack_size(len(data) + headlen) + flags + '|' + data
 		idx = 0
 		outlen = len(out)
 		out += '\x00' * (outlen % 3)
@@ -71,16 +73,50 @@ class HiddenAlfa:
 		if idx < len(out):
 			raise IndexError("Could not write %i bytes of %i" % (len(out) - idx, len(out)))
 	
+	def _read_raw_data(self):
+		data = []
+		for x in self.image.size[0]:
+			for y in self.image.size[1]:
+				if self.pixels[x, y][3] == 0:
+					data.extend(self.pixels[x, y][0:3])
+		data = ''.join(map(lamda x: chr(x), data))
+		datalen = unpack_size(data[0:4])
+		headbuff = data[4:13]
+		if  not '|' in headbuff:
+			raise ValueError("Header error")
+		flags = headbuff[0:headbuff.index('|')]
+		payloadstart = headbuff.index('|') + 4 + 1
+		try:
+			payload = data[payloadstart:payloadstart+datalen]
+		except IndexError:
+			raise IndexError("Unexpected end of data")
+		return (payload, flags)
+	
 	def create(self, path='', fileobj=None, flags=''):
-		if not (os.path.exists(path) or fileobj):
-			raise IOError("File or directory not found: %s" % path)
-		if (os.path.isdir(path) or archive) and not fileobj:
-			data = self.formats['t'].create(path)
-			_add_raw_data(flags
+		if os.path.isfile(path):
+			with open(path, 'rb') as f:
+				data = f.read()
+		elif fileobj:
+			data = fileobj.read()
+		elif os.path.isdir(path) and (not 't' in flags):
+			raise ValueError("Can't archive a directory without an archive format")
 		else:
+			raise IOError("File or directory not found: %s" % path)
+		for fl in flags:
+			data = self.formats[fl].create(path=path, data=data)
+		self._write_raw_data(data, flags=flags)
+
+	def extract(self, path='', fileobj=None):
+		if os.path.exists(path):
+			raise IOError("Destination alredy exists: %s" % path)
+		data, flags = _read_raw_data(self)
+		flags.reverse()
+		for fl in flags:
+			data = self.formats[fl].extract(path=path, data=data)
+		if data:
 			if fileobj:
-				data = fileobj.read()
+				fileobj.write(data)
 			else:
-				with open(path, 'rb') as f:
-					data = f.read()
-			return data	
+				with open(path, 'wb') as f:
+					f.write(data)
+		
