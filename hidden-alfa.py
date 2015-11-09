@@ -3,7 +3,11 @@ from PIL import Image
 import zlib
 import struct
 
-ZLIB_DECOMPRESS_MAXSIZE=1024*1024*100
+ALFA_ZLIB_DECOMPRESS_MAXSIZE=1024*1024*100
+
+ALFA_CRC32=1
+ALFA_ZLIB=2
+ALFA_PREFIXNAME=4
 
 class FormatException(Exception):
 	pass
@@ -21,11 +25,11 @@ def zlib_create(self, data):
 def zlib_extract(self, data):
 	dec = zlib.decompressobj()
 	try:
-		data = dec.decompress(data, ZLIB_DECOMPRESS_MAXSIZE)
+		data = dec.decompress(data, ALFA_ZLIB_DECOMPRESS_MAXSIZE)
 	except zlib.error as e:
 		raise FormatException("Zlib error %s" % e)
 	if dec.unconsumed_tail:
-		raise FormatException("Zlib decompressed size exceeds %i bytes limit" % ZLIB_DECOMPRESS_MAXSIZE)
+		raise FormatException("Zlib decompressed size exceeds %i bytes limit" % ALFA_ZLIB_DECOMPRESS_MAXSIZE)
 	return (data, dec.unused_data)
 
 def prefixname_create(self, data, name):
@@ -39,7 +43,7 @@ def prefixname_extract(self, data):
 	return (data[nlen:], name)
 
 class HiddenAlfa:
-	def __init__(self.image):
+	def __init__(self, image):
 		if isinstance(a, Image.Image):
 			self.image = image
 		else:
@@ -57,7 +61,7 @@ class HiddenAlfa:
 					size += 3
 		return size
 
-	def _write_raw_data(self, data):
+	def write_raw_data(self, data):
 		idx = 0
 		outlen = len(data)
 		data += '\x00' * (outlen % 3)
@@ -69,7 +73,7 @@ class HiddenAlfa:
 		if idx < len(data):
 			raise IndexError("Could not write %i bytes of %i" % (len(data) - idx, len(data)))
 	
-	def _read_raw_data(self):
+	def read_raw_data(self):
 		data = []
 		for x in self.image.size[0]:
 			for y in self.image.size[1]:
@@ -89,3 +93,14 @@ class HiddenAlfa:
 		except IndexError:
 			raise IndexError("Unexpected end of data")
 		return (payload, flags)
+
+
+def cmdline():
+	import argparse
+	parser = argparse.ArgumentParser()
+	#TODO
+	#prefixlength((crc32|zlib)((data|prefixname(data))))
+
+
+if __name__ == "__main__":
+	cmdline()
