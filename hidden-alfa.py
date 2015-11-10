@@ -1,4 +1,3 @@
-from StringIO import StringIO
 from PIL import Image
 import zlib
 import struct
@@ -48,8 +47,8 @@ class HiddenAlfa:
 			self.image = image
 		else:
 			self.image = Image.open(image)
-		if self.image.mode != 'RGBA':
-			raise ValueError("Image must be an RGBA image")
+		if self.image.mode != 'RGBA' or self.image.format != 'PNG':
+			raise ValueError("Image must be an RGBA PNG image")
 		self.pixels = self.image.load()
 		self.headlen = 5
 	
@@ -79,12 +78,12 @@ class HiddenAlfa:
 			for y in self.image.size[1]:
 				if self.pixels[x, y][3] == 0:
 					data.extend(self.pixels[x, y][0:3])
-		return ''.join(map(lamda x: chr(x), data))
+		return ''.join(map(lambda x: chr(x), data))
 		
 	def prefixlength_create(self, data, flags=0):
 		return struct.pack('<I', len(data) + self.headlen) + chr(flags) + data
 		
-	def prefixlength_extract(self, data, offset=0)
+	def prefixlength_extract(self, data, offset=0):
 		datalen = struct.unpack('<I', data[offset:offset+4])
 		flags = data[offset + self.headlen]
 		payloadstart = offset + self.headlen + 1
@@ -98,6 +97,16 @@ class HiddenAlfa:
 def cmdline():
 	import argparse
 	parser = argparse.ArgumentParser()
+	parser.add_argument("image", help="PNG image to use")
+	parser.add_argument("-w", "--write", help="write one or more files to the image, use - to read stdin",  action='append', metavar="file", nargs="+")
+	parser.add_argument("-e", "--extract-one", help="extract one file, use - to write to stdout", action="store_true")
+	parser.add_argument("-x", "--extract-many", help="try extracting more than one file", action="store_true")
+	parser.add_argument("-t", "--test", help="test image for data", action="store_true")
+	parser.add_argument("-r", "--remove", help="blanks transparencies in the image", action="store_true")
+	parser.add_argument("-a", "--anonymous", help="don't store file names", action="store_false")
+	parser.add_argument("-d", "--destination", help="destination image, defaults to overwriting the original image", action="store")
+	parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
+	args = parser.parse_args()
 	#TODO
 	#prefixlength((crc32|zlib)((data|prefixname(data))))
 
