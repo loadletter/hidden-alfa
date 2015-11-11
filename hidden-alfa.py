@@ -6,7 +6,7 @@ ALFA_ZLIB_DECOMPRESS_MAXSIZE=1024*1024*100
 
 ALFA_CRC32=1
 ALFA_ZLIB=2
-ALFA_PREFIXNAME=4
+ALFA_FILENAME=4
 
 class FormatException(Exception):
 	pass
@@ -31,12 +31,12 @@ def zlib_extract(self, data):
 		raise FormatException("Zlib decompressed size exceeds %i bytes limit" % ALFA_ZLIB_DECOMPRESS_MAXSIZE)
 	return (data, dec.unused_data)
 
-def prefixname_create(self, data, name):
+def filename_create(self, data, name):
 	nlen = len(name)
 	if nlen >= 0xFF:
 		raise FormatException("Filename too long")
 	return chr(nlen) + name + data
-def prefixname_extract(self, data):
+def filename_extract(self, data):
 	nlen = ord(data[0])
 	name = data[1:nlen]
 	return (data[nlen:], name)
@@ -92,13 +92,16 @@ class HiddenAlfa:
 		except IndexError:
 			raise IndexError("Unexpected end of data")
 		return (payload, flags)
+	
+	def save(self, filename):
+		self.image.save(filename)
 
 
 def cmdline():
 	import argparse
 	parser = argparse.ArgumentParser()
 	parser.add_argument("image", help="PNG image to use")
-	parser.add_argument("-w", "--write", help="write one or more files to the image, use - to read stdin",  action='append', metavar="file", nargs="+")
+	parser.add_argument("-w", "--write", help="write one or more files to the image, use - to read stdin",  action='append', metavar="file")
 	parser.add_argument("-e", "--extract-one", help="extract one file, use - to write to stdout", action="store_true")
 	parser.add_argument("-x", "--extract-many", help="try extracting more than one file", action="store_true")
 	parser.add_argument("-t", "--test", help="test image for data", action="store_true")
@@ -107,8 +110,49 @@ def cmdline():
 	parser.add_argument("-d", "--destination", help="destination image, defaults to overwriting the original image", action="store")
 	parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
 	args = parser.parse_args()
-	#TODO
-	#prefixlength((crc32|zlib)((data|prefixname(data))))
+	destination = args.image
+	if args.destination:
+		destination = args.destination
+	if args.write:
+		data = []
+		for num, fn in enumerate(args.write):
+			if args.anonymous:
+				n = ''
+			else:
+				n = os.path.basename(fn)
+			if fn == '-':
+				data.append((n, sys.stdin.read()))
+			else:
+				with open(fn, 'rb') as f:
+					data.append((n, f.read()))
+		ha = HiddenAlfa(args.image)
+		out = ''
+		for n, d in data:
+			flags = 0
+			if n:
+				d = filename_create(d, n)
+				flags =| ALFA_FILENAME
+			zd = zlib_create(d)
+			dout = ''
+			if (len(zd) + 8) < len(d):
+				flags =| ALFA_ZLIB
+				dout += zd
+			else:
+				flags =| ALFA_CRC32
+				dout += crc32_create(d)
+			out += ha.prefix_create(dout, flags)
+		ha.write_raw_data(out)
+		ha.save(destination)
+	elif args.extract_one:
+		pass
+	elif args.extract_many:
+		pass
+	elif args.test:
+		pass
+	elif args.remove:
+		pass
+	else:
+		pass
 
 
 if __name__ == "__main__":
