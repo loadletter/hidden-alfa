@@ -95,10 +95,9 @@ class HiddenAlfa:
 			raise FormatException("Overflow")
 		flags = ord(data[offset + self.headlen - 1])
 		payloadstart = offset + self.headlen
-		try:
-			payload = data[payloadstart:offset+datalen]
-		except IndexError:
-			raise FormatException("Unexpected end of data")
+		payload = data[payloadstart:offset+datalen]
+		if datalen != len(payload):
+			raise FormatException("Expected %i bytes, got %i" % (datalen, len(payload)))
 		return (payload, flags)
 	
 	def save(self, filename):
